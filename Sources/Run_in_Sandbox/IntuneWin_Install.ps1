@@ -41,4 +41,4 @@ $ServiceUI = "$Sandbox_Folder\ServiceUI.exe"
 $PsExec = "$Sandbox_Folder\PsExec.exe"
 
 
-& $PsExec \\localhost -w "$Extract_Path" -nobanner -accepteula -s $ServiceUI -Process:explorer.exe C:\WINDOWS\system32\cmd.exe /k $Command
+& $PsExec \\localhost -w "$Extract_Path" -nobanner -accepteula -s $ServiceUI -Process:explorer.exe C:\windows\SysWOW64\cmd.exe /k $Command
