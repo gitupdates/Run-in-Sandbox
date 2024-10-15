@@ -1,7 +1,9 @@
-param (
+﻿param (
     [Parameter(Mandatory=$true)] [String]$Type,
     [Parameter(Mandatory=$true)] [String]$ScriptPath
 )
+
+#Start-Transcript -Path $(Join-Path -Path $([System.Environment]::GetEnvironmentVariables('Machine').TEMP) -ChildPath "RunInSandbox.log")
 
 $special_char_array = 'é', 'è', 'à', 'â', 'ê', 'û', 'î', 'ä', 'ë', 'ü', 'ï', 'ö', 'ù', 'ò', '~', '!', '@', '#', '$', '%', '^', '&', '+', '=', '}', '{', '|', '<', '>', ';'
 foreach ($char in $special_char_array) {
@@ -78,6 +80,7 @@ if (Test-Path $Sandbox_File_Path) {
 
 
 function New-WSB {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [String]$Command_to_Run
     )
