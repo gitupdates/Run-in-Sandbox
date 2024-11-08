@@ -2,7 +2,7 @@
 ###### *[View the full blog post here](https://www.systanddeploy.com/2023/06/runinsandbox-quick-way-to-runextract.html)*
 
 #### Original Author & creator: Damien VAN ROBAEYS
-#### Rewritten and maintained now by Joly0
+#### Rewritten and maintained now by: Joly0
 
 This allows you to do the below things in Windows Sandbox **just from a right-click** by adding context menus:
 - Run PS1 as user or system in Sandbox
@@ -16,23 +16,30 @@ This allows you to do the below things in Windows Sandbox **just from a right-cl
 - Share a specific folder in Sandbox
 - Run multiple app´s/scripts in the same Sandbox session
 
+![alt text](https://github.com/damienvanrobaeys/Run-in-Sandbox/blob/master/ps1_system.gif)
 
 **Note that this project has been build on personal time, it's not a professional project. Use it at your own risk, and please read How to install it before running it.**
+<br/>
+<br/>
+<br/>
+<br/>
 
-### How to install it ?
-#### All the steps need to be executed from the Host, not inside the Sandbox
+# How to install it ?
+All the steps need to be executed from the Host, not inside the Sandbox
 
-##### Method 1 - PowerShell (Recommended)
--   Right-click on the Windows start menu and select PowerShell or Terminal (Not CMD).
--   Copy and paste the code below and press enter 
-`irm https://raw.githubusercontent.com/Joly0/Run-in-Sandbox/master/Install_Run-in-Sandbox.ps1 | iex`  
--   You will see the process being started. You will probably be asked to grant admin rights.
+### <mark>__Method 1 - PowerShell (Recommended)__</mark>
+-   Right-click on the Windows start menu and select PowerShell or Terminal (Not CMD), preferably as admin.
+-   Copy and paste the code below and press enter:
+#### __`rm https://raw.githubusercontent.com/Joly0/Run-in-Sandbox/master/Install_Run-in-Sandbox.ps1 | iex`__
+-   You will see the process being started. You will probably be asked to grant admin rights if not started as admin.
 -   That's all.
 
-Note - On older Windows builds you may need to run the below command before,  
-`[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12`
+Note - On older Windows builds you may need to run the below command first: \
+__`[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12`__
+<br/>
+<br/>
 
-##### Method 2 - Traditional
+### <mark>__Method 2 - Traditional__</mark>
 This method allows you to use the parameters "-NoCheckpoint" to skip creation of a restore point and "-NoSilent" to give a bit more output
 - Download the ZIP Run-in-Sandbox project (this is the main prerequiste)
 - Extract the ZIP
@@ -42,6 +49,4 @@ This method allows you to use the parameters "-NoCheckpoint" to skip creation of
 - Once you have downloaded the folder structure, **check if files have not be blocked after download**
 - Do a right-click on Add_Structure.ps1 and check if needed check Unblocked
 - Run Add_Structure.ps1 **with admin rights**
-
-
-![alt text](https://github.com/damienvanrobaeys/Run-in-Sandbox/blob/master/ps1_system.gif)
+<br/>
