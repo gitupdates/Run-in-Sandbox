@@ -64,7 +64,10 @@ try {
 # Construct the path to the add_structure.ps1 script
 $addStructureScript = Join-Path -Path $extractPath -ChildPath "Add_Structure.ps1"
 
-Set-ExecutionPolicy -Scope Process Unrestricted
+# Set Execution Policy and unblock files
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted
+Get-ChildItem -LiteralPath $extractPath -Filter "*.ps1" | Unblock-File
+
 # Execute the add_structure.ps1 script with the "-NoCheckpoint" parameter if it was provided
 try {
     Write-Host "Executing Add_Structure.ps1 script..."
