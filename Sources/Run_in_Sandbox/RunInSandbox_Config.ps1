@@ -100,8 +100,8 @@ $Apply_install.add_click({
 	$Get_XML_Content.Configuration.ContextMenu_Reg         = $Reg_Status
 	$Get_XML_Content.Configuration.ContextMenu_Intunewin   = $Intunewin_Status
 	$Get_XML_Content.Configuration.ContextMenu_MultipleApp = $MultipleApp_Status
-	$Get_XML_Content.Configuration.ContextMenu_PDF = $Open_PDF_Status
-	$Get_XML_Content.Configuration.ContextMenu_CMD = $Run_CMD_Status
+	$Get_XML_Content.Configuration.ContextMenu_PDF 		   = $Open_PDF_Status
+	$Get_XML_Content.Configuration.ContextMenu_CMD		   = $Run_CMD_Status
 
 	$Get_XML_Content.Save($XML_Config)
 	$Form_PS1.Close()

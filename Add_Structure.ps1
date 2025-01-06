@@ -17,11 +17,11 @@ New-Item -Path $Log_File -Type file -Force | Out-Null
 
 Write-LogMessage -Message_Type "INFO" -Message "Starting the configuration of RunInSandbox"
 
-CheckFor-Admin
+Test-ForAdmin
 
-CheckFor-Sandbox
+Test-ForSandbox
 
-CheckFor-Sources
+Test-ForSources
 
 
 $Progress_Activity = "Enabling Run in Sandbox context menus"
@@ -40,7 +40,7 @@ if ($NoSilent) {
 Get-Config
 Write-Progress -Activity $Progress_Activity -PercentComplete 10
 
-Create-Checkpoint
+New-Checkpoint
 Write-Progress -Activity $Progress_Activity -PercentComplete 20
 
 Write-LogMessage -Message_Type "INFO" -Message "Adding context menu"

@@ -8,8 +8,8 @@ Unblock-File -Path $Current_Folder\CommonFunctions.ps1
 . "$Current_Folder\CommonFunctions.ps1"
 
 
-CheckFor-SandboxFolder
-CheckFor-Admin
+Test-ForSandboxFolder
+Test-ForAdmin
 Get-Config
 
 if ( (Test-Path -LiteralPath $Run_in_Sandbox_Folder) -and (-not $DeepClean) ) {

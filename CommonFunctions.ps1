@@ -246,7 +246,7 @@ function Get-Config {
 }
 
 # Function to check if the script is run with admin privileges
-function CheckFor-Admin {
+function Test-ForAdmin {
     $Run_As_Admin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $Run_As_Admin) {
         Write-LogMessage -Message_Type "ERROR" -Message "The script has not been launched with admin rights"
@@ -257,7 +257,7 @@ function CheckFor-Admin {
 }
 
 # Function to check for source files
-function CheckFor-Sources {
+function Test-ForSources {
     if (-not (Test-Path -Path $Sources)) {
         Write-LogMessage -Message_Type "ERROR" -Message "Sources folder is missing"
         [System.Windows.Forms.MessageBox]::Show("It seems you haven´t downloaded all the folder structure.`nThe folder `"Sources`" is missing !!!")
@@ -274,7 +274,7 @@ function CheckFor-Sources {
 }
 
 # Function to check if the Windows Sandbox feature is installed
-function CheckFor-Sandbox {
+function Test-ForSandbox {
     try {
         $Is_Sandbox_Installed = (Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue | Where-Object { $_.featurename -eq "Containers-DisposableClientVM" }).state
     } catch {
@@ -294,7 +294,7 @@ function CheckFor-Sandbox {
 }
 
 # Function to check if the Sandbox folder exists
-function CheckFor-SandboxFolder {
+function Test-ForSandboxFolder {
     if ( [string]::IsNullOrEmpty($Sandbox_Folder) ) {
         return
     }
@@ -338,7 +338,7 @@ function Unblock-Sources {
     }
 }
 
-function Create-Checkpoint {
+function New-Checkpoint {
     if (-not $NoCheckpoint) {
         $SystemRestoreEnabled = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" -Name "RPSessionInterval").RPSessionInterval
         if ($SystemRestoreEnabled -eq 0) {
