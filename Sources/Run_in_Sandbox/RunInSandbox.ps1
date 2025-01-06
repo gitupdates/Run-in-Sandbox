@@ -384,7 +384,10 @@ switch ($Type) {
     }
 }
 
-Start-Process $Sandbox_File_Path -Wait
+Start-Process -FilePath $Sandbox_File_Path -Wait
+do {
+    Start-Sleep -Seconds 1
+} while (Get-Process -Name "WindowsSandboxServer" -ErrorAction SilentlyContinue)
 
 if ($WSB_Cleanup -eq $True) {
     Remove-Item -LiteralPath $Sandbox_File_Path -Force -ErrorAction SilentlyContinue
