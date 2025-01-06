@@ -129,9 +129,9 @@ function New-WSB {
     }
     Add-Content -LiteralPath $Sandbox_File_Path -Value "    </MappedFolders>"
 
-    Add-Content -Path $Sandbox_File_Path  -Value "	<LogonCommand>"
-    Add-Content -Path $Sandbox_File_Path  -Value "		<Command>$Command_to_Run</Command>"
-    Add-Content -Path $Sandbox_File_Path  -Value "	</LogonCommand>"
+    Add-Content -Path $Sandbox_File_Path  -Value "    <LogonCommand>"
+    Add-Content -Path $Sandbox_File_Path  -Value "        <Command>$Command_to_Run</Command>"
+    Add-Content -Path $Sandbox_File_Path  -Value "    </LogonCommand>"
     Add-Content -Path $Sandbox_File_Path  -Value "</Configuration>"
 }
 
