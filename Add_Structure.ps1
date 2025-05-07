@@ -49,7 +49,7 @@ Write-LogMessage -Message_Type "INFO" -Message "OS version is: $Windows_Version"
 
 if ($Add_CMD -eq $True) {
     Add-RegItem -Sub_Reg_Path "cmdfile" -Type "CMD"
-    Add-RegItem -Sub_Reg_Path "batfile" -Type "BAT"
+    Add-RegItem -Sub_Reg_Path "batfile" -Type "CMD"
 }
 Write-Progress -Activity $Progress_Activity -PercentComplete 25
 
