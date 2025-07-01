@@ -50,3 +50,7 @@ This method allows you to use the parameters "-NoCheckpoint" to skip creation of
 - Do a right-click on Add_Structure.ps1 and check if needed check Unblocked
 - Run Add_Structure.ps1 **with admin rights**
 <br/>
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Joly0/Run-in-Sandbox&type=Date)](https://www.star-history.com/#Joly0/Run-in-Sandbox&Date)
