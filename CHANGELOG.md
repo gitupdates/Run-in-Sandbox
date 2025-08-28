@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2025-08-20
+### Security
+- **Enhanced 7-Zip Integration:** Removed bundled 7-Zip executables for improved security
+- **On-Demand 7-Zip:** Now uses host-installed 7-Zip when available, or downloads latest version from GitHub releases
+- **Smart Caching:** Automatic download and caching of 7-Zip installers with 7-day refresh cycle
+- **Offline Support:** Works offline using cached installers when network is unavailable
+- **Always Current:** Ensures latest 7-Zip version is used, eliminating security vulnerabilities from outdated bundled files
+### Changed
+- Modified `RunInSandbox.ps1` to detect and mount host 7-Zip installation
+- Updated installation process to cache latest 7-Zip installer during setup
+- Enhanced `New-WSB` function to support additional mapped folders
+- Reduced project size by ~2MB by removing bundled 7-Zip files
+### Added
+- `Find-Host7Zip` function for detecting system 7-Zip installations
+- `Get-Latest7ZipDownloadUrl` function for GitHub API integration
+- `Update-7ZipCache` function for smart installer management
+- `Ensure-7ZipCache` function for offline-capable cache validation
+- Version tracking and age-based cache refresh mechanism
+
+
+## 2025-05-07
+### Fixed
+- Fixed running batch files in Sandbox
+- Fixed label for "Run BAT in Sandbox"
+
+
+## 2025-01-06
+### Fixed
+- Fixed [#7]https://github.com/Joly0/Run-in-Sandbox/issues/7 and [#58]https://github.com/damienvanrobaeys/Run-in-Sandbox/issues/58
+- Fixed indendation for wsb file
+- Fixed [#8]https://github.com/Joly0/Run-in-Sandbox/issues/8
+
+
+## 2024-11-8
+### Changed
+- Slightly adjusted RunInSandbox installer script
+- Improved readme for RunInSandbox installation
+
+
+## 2024-10-15
+### Fixed
+- Fixed [#56]https://github.com/damienvanrobaeys/Run-in-Sandbox/issues/56
+### Changed
+- Formatting improvements for RunInSandbox.ps1 script
+
+
 ## 2024-08-26
 ### Fixed
 - Fixed Subcommands Entries for Powershell and VBS

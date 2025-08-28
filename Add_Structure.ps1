@@ -32,6 +32,15 @@ Copy-Sources
 
 Unblock-Sources
 
+# Cache initial 7-Zip installer
+Write-Progress -Activity $Progress_Activity -PercentComplete 5
+Write-LogMessage -Message_Type "INFO" -Message "Downloading and caching latest 7-Zip installer"
+if (Update-7ZipCache) {
+    Write-LogMessage -Message_Type "SUCCESS" -Message "7-Zip installer cached successfully"
+} else {
+    Write-LogMessage -Message_Type "WARNING" -Message "Failed to cache 7-Zip installer - will retry on first use"
+}
+
 if ($NoSilent) {
     powershell -NoProfile $Current_Folder\Sources\Run_in_Sandbox\RunInSandbox_Config.ps1
 }
@@ -201,9 +210,12 @@ if ($Add_ZIP -eq $True) {
     if (Test-Path -Path "Registry::HKEY_CLASSES_ROOT\7-Zip.7z") {
         Add-RegItem -Sub_Reg_Path "7-Zip.7z" -Type "7z" -Info_Type "7z" -Entry_Name "ZIP" -Key_Label "Extract 7z file in Sandbox"
     }
+    if (Test-Path -Path "Registry::HKEY_CLASSES_ROOT\SystemFileAssociations\.7z") {
+        Add-RegItem -Sub_Reg_Path "SystemFileAssociations\.7z" -Type "7z" -Info_Type "7z" -Entry_Name "ZIP" -Key_Label "Extract 7z file in Sandbox"
+    }
     if (Test-Path -Path "Registry::HKEY_CLASSES_ROOT\7-Zip.rar") {
         Add-RegItem -Sub_Reg_Path "7-Zip.rar" -Type "7z" -Info_Type "7z" -Entry_Name "ZIP" -Key_Label "Extract RAR file in Sandbox"
-    }
+    }  
 }
 Write-Progress -Activity $Progress_Activity -PercentComplete 100
 

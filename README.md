@@ -11,8 +11,8 @@ This allows you to do the below things in Windows Sandbox **just from a right-cl
 - Open URL or HTML file in Sandbox
 - Open PDF file in Sandbox
 - Extract ZIP file directly in Sandbox
-- Extract 7z file directly in Sandbox
-- Extract ISO directly in Sandbox
+- Extract 7z file directly in Sandbox (uses host-installed 7-Zip or downloads latest version)
+- Extract ISO directly in Sandbox (uses host-installed 7-Zip or downloads latest version)
 - Share a specific folder in Sandbox
 - Run multiple app´s/scripts in the same Sandbox session
 

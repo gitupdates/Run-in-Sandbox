@@ -37,6 +37,9 @@ $Full_Startup_Path_Quoted = """$Full_Startup_Path"""
 
 $Run_in_Sandbox_Folder = "$env:ProgramData\Run_in_Sandbox"
 
+# Load common functions
+. "$Run_in_Sandbox_Folder\CommonFunctions.ps1"
+
 $xml = "$Run_in_Sandbox_Folder\Sandbox_Config.xml"
 $my_xml = [xml](Get-Content $xml)
 $Sandbox_VGpu = $my_xml.Configuration.VGpu
@@ -82,7 +85,8 @@ if (Test-Path $Sandbox_File_Path) {
 function New-WSB {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
-        [String]$Command_to_Run
+        [String]$Command_to_Run,
+        [Array]$AdditionalMappedFolders = @()
     )
 
     New-Item $Sandbox_File_Path -type file -Force | Out-Null
@@ -127,6 +131,16 @@ function New-WSB {
         Add-Content -LiteralPath $Sandbox_File_Path -Value "            <ReadOnly>$Sandbox_ReadOnlyAccess</ReadOnly>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
     }
+    
+    # Add any additional mapped folders
+    foreach ($MappedFolder in $AdditionalMappedFolders) {
+        Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
+        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>$($MappedFolder.HostFolder)</HostFolder>"
+        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>$($MappedFolder.SandboxFolder)</SandboxFolder>"
+        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <ReadOnly>$($MappedFolder.ReadOnly)</ReadOnly>"
+        Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
+    }
+    
     Add-Content -LiteralPath $Sandbox_File_Path -Value "    </MappedFolders>"
 
     Add-Content -Path $Sandbox_File_Path  -Value "    <LogonCommand>"
@@ -137,8 +151,40 @@ function New-WSB {
 
 switch ($Type) {
     "7Z" {
-        $Script:Startup_Command = "$Sandbox_Root_Path\7z\7z.exe" + " " + "x" + " " + "$Full_Startup_Path_Quoted" + " " + "-y" + " " + "-o" + "C:\Users\WDAGUtilityAccount\Desktop\Extracted_File"
-        New-WSB -Command_to_Run $Startup_Command
+        # Try to find 7-Zip on host system first
+        $Host7ZipPath = Find-Host7Zip
+        $AdditionalFolders = @()
+        
+        if ($Host7ZipPath) {
+            # Mount the host 7-Zip installation into sandbox
+            $Host7ZipFolder = Split-Path $Host7ZipPath -Parent
+            
+            $AdditionalFolders += @{
+                HostFolder = $Host7ZipFolder
+                SandboxFolder = "C:\Program Files\7-Zip"
+                ReadOnly = "true"
+            }
+            
+            $Script:Startup_Command = "`"C:\Program Files\7-Zip\7z.exe`" x $Full_Startup_Path_Quoted -y -oC:\Users\WDAGUtilityAccount\Desktop\Extracted_File"
+            
+            Write-LogMessage -Message_Type "INFO" -Message "Using host 7-Zip installation: $Host7ZipPath"
+        }
+        else {
+            # No host installation found, ensure we have a cached installer
+            if (-not (Ensure-7ZipCache)) {
+                [System.Windows.Forms.MessageBox]::Show("Failed to download 7-Zip installer and no cached version available.`nPlease check your internet connection.")
+                EXIT
+            }
+            
+            $CachedInstaller = "$Sandbox_Root_Path\temp\7zSetup.msi"
+            
+            # Install 7-Zip in sandbox then extract
+            $Script:Startup_Command = "$PSRun_Command `"Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i \`"$CachedInstaller\`" /quiet' -Wait; Start-Process -FilePath 'C:\Program Files\7-Zip\7z.exe' -ArgumentList 'x $Full_Startup_Path_Quoted -y -oC:\Users\WDAGUtilityAccount\Desktop\Extracted_File' -Wait`""
+            
+            Write-LogMessage -Message_Type "INFO" -Message "Using cached 7-Zip installer: $CachedInstaller"
+        }
+        
+        New-WSB -Command_to_Run $Startup_Command -AdditionalMappedFolders $AdditionalFolders
     }
     "CMD" {
         $Script:Startup_Command = $PSRun_Command + " " + "Start-Process $Full_Startup_Path_Quoted"
@@ -238,8 +284,40 @@ switch ($Type) {
         New-WSB -Command_to_Run $Startup_Command
     }
     "ISO" {
-        $Script:Startup_Command = "$Sandbox_Root_Path\7z\7z.exe" + " " + "x" + " " + "$Full_Startup_Path_Quoted" + " " + "-y" + " " + "-o" + "C:\Users\WDAGUtilityAccount\Desktop\Extracted_ISO"
-        New-WSB -Command_to_Run $Startup_Command
+        # Try to find 7-Zip on host system first
+        $Host7ZipPath = Find-Host7Zip
+        $AdditionalFolders = @()
+        
+        if ($Host7ZipPath) {
+            # Mount the host 7-Zip installation into sandbox
+            $Host7ZipFolder = Split-Path $Host7ZipPath -Parent
+            
+            $AdditionalFolders += @{
+                HostFolder = $Host7ZipFolder
+                SandboxFolder = "C:\Program Files\7-Zip"
+                ReadOnly = "true"
+            }
+            
+            $Script:Startup_Command = "`"C:\Program Files\7-Zip\7z.exe`" x $Full_Startup_Path_Quoted -y -oC:\Users\WDAGUtilityAccount\Desktop\Extracted_ISO"
+            
+            Write-LogMessage -Message_Type "INFO" -Message "Using host 7-Zip installation for ISO: $Host7ZipPath"
+        }
+        else {
+            # No host installation found, ensure we have a cached installer
+            if (-not (Ensure-7ZipCache)) {
+                [System.Windows.Forms.MessageBox]::Show("Failed to download 7-Zip installer and no cached version available.`nPlease check your internet connection.")
+                EXIT
+            }
+            
+            $CachedInstaller = "$Run_in_Sandbox_Folder\temp\7zSetup.msi"
+            
+            # Install 7-Zip in sandbox then extract ISO
+            $Script:Startup_Command = "$PSRun_Command `"Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i \`"$CachedInstaller\`" /quiet' -Wait; Start-Process -FilePath 'C:\Program Files\7-Zip\7z.exe' -ArgumentList 'x $Full_Startup_Path_Quoted -y -oC:\Users\WDAGUtilityAccount\Desktop\Extracted_ISO' -Wait`""
+            
+            Write-LogMessage -Message_Type "INFO" -Message "Using cached 7-Zip installer for ISO: $CachedInstaller"
+        }
+        
+        New-WSB -Command_to_Run $Startup_Command -AdditionalMappedFolders $AdditionalFolders
     }
     "MSI" {
         $Full_Startup_Path_UnQuoted = $Full_Startup_Path_Quoted.Replace('"', "")
