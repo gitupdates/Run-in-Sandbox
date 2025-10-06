@@ -81,6 +81,141 @@ if (Test-Path $Sandbox_File_Path) {
     Remove-Item $Sandbox_File_Path
 }
 
+function Enable-StartupScripts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OriginalCommand,  # whatever you would have passed as -Command_to_Run
+        [string]$StartupScriptFolderName = "startup-scripts"
+    )
+
+    $StartupScriptsFolder = Join-Path $Run_in_Sandbox_Folder $StartupScriptFolderName
+    New-Item -ItemType Directory -Path $StartupScriptsFolder -Force | Out-Null
+    
+    if ($OriginalCommand -ne "") {
+       # Write the original command into a file
+        $origCmdFile = Join-Path $StartupScriptsFolder "OriginalCommand.txt"
+        Set-Content -LiteralPath $origCmdFile -Value $OriginalCommand -Encoding UTF8 -Force 
+    }
+
+    # Orchestrator that runs NN-*.ps1 in lexicographic order, then runs the original command
+    $orchestrator = @'
+param(
+    [string]$ScriptsPath = "C:\Run_in_Sandbox\startup-scripts",
+    # Can include this switch when running from the .wsb file to indicate it's the first launch of the sandbox
+    # Useful if re-running this script within the sandbox as a test, but don't want certain parts to run again
+    [switch]$launchingSandbox
+)
+
+# ------ Check that we're running in the Windows Sandbox ------
+# This script is intended to be run from within the Windows Sandbox. We'll do a rudamentary check for if the current user is named "WDAGUtilityAccount"
+if ($env:USERNAME -ne "WDAGUtilityAccount") {
+    Write-host "`n`nERROR: This script is intended to be run from WITHIN the Windows Sandbox.`nIt appears you are running this from outside the sandbox.`n" -ForegroundColor Red
+    Write-host "`nPress Enter to exit." -ForegroundColor Yellow
+    Read-Host
+    exit
+}
+
+Write-Host "[Orchestrator] Scripts path: $ScriptsPath"
+
+# 1) Run ordered startup scripts: 00-*, 01-* ... 99-*
+$pattern = '^\d{2}-.+\.ps1$'
+$items = Get-ChildItem -LiteralPath $ScriptsPath -Filter *.ps1 -File -ErrorAction SilentlyContinue |
+         Where-Object { $_.Name -match $pattern } |
+         Sort-Object Name
+
+foreach ($i in $items) {
+    Write-Host "[Orchestrator] Running: $($i.Name)"
+    try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $i.FullName
+        $rc = $LASTEXITCODE
+        if ($rc -ne $null -and $rc -ne 0) {
+            Write-Warning "[Orchestrator] Script $($i.Name) returned exit code $rc"
+        }
+    } catch {
+        Write-Warning "[Orchestrator] Script $($i.Name) threw: $($_.Exception.Message)"
+    }
+}
+
+# 2) Read and run the original command last
+$origFile = Join-Path $ScriptsPath "OriginalCommand.txt"
+if (Test-Path -LiteralPath $origFile) {
+    $orig = Get-Content -LiteralPath $origFile -Raw
+    Write-Host "[Orchestrator] Running original command..."
+    # Run through cmd to support both cmd and PowerShell-style lines
+    Start-process -Filepath "C:\Windows\SysWOW64\cmd.exe" -ArgumentList "/c $orig" -WindowStyle Hidden
+} else {
+    Write-Warning "[Orchestrator] OriginalCommand.txt not found; nothing to run."
+}
+'@
+
+    $orchestratorPath = Join-Path $StartupScriptsFolder "_orchestrator.ps1"
+    Set-Content -LiteralPath $orchestratorPath -Value $orchestrator -Encoding UTF8 -Force
+
+    # Return the single Sandbox command that runs the orchestrator
+    "C:\Run_in_Sandbox\ServiceUI.exe -Process:explorer.exe C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -sta -WindowStyle Normal -NoProfile -ExecutionPolicy Bypass -NoExit -File `"$Sandbox_Root_Path\$StartupScriptFolderName\_orchestrator.ps1`""
+}
+
+function Add-NotepadToSandbox {
+    [CmdletBinding()]
+    param(
+        [string]$HostPayloadRoot = "C:\ProgramData\Run_in_Sandbox\NotepadPayload",
+        [switch]$EnforceEnUsFallback # if set, will try en-US when preferred language is missing
+    )
+
+    # Resolve a single notepad.exe (prefer System32)
+    $exeCandidates = Get-Command notepad.exe -ErrorAction Stop | Select-Object -ExpandProperty Source
+    $exePath = ($exeCandidates | Where-Object { $_ -match '\\Windows\\System32\\' } | Select-Object -First 1)
+    if (-not $exePath) { $exePath = $exeCandidates | Select-Object -First 1 }
+
+    $exeDir  = Split-Path $exePath -Parent
+    $exeName = Split-Path $exePath -Leaf
+
+    # Build candidate language list
+    $candidates = @()
+    try { $candidates += (Get-UICulture).Name } catch {}
+    try { $candidates += (Get-WinSystemLocale).Name } catch {}
+    try {
+        $candidates += Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Control\MUI\UILanguages" |
+                       Select-Object -ExpandProperty PSChildName
+    } catch {}
+    $candidates = $candidates | Where-Object { $_ } | Select-Object -Unique
+
+    # Probe possible MUI locations
+    $dirs = @(
+        $exeDir,
+        (Join-Path $env:WINDIR 'System32'),
+        (Join-Path $env:WINDIR 'SysWOW64'),
+        $env:WINDIR
+    ) | Select-Object -Unique
+
+    $muiPath = $null; $resolvedLang = $null
+    foreach ($lang in $candidates) {
+        foreach ($dir in $dirs) {
+            $p = Join-Path (Join-Path $dir $lang) "$exeName.mui"
+            if (Test-Path -LiteralPath $p) { $muiPath = $p; $resolvedLang = $lang; break }
+        }
+        if ($muiPath) { break }
+    }
+
+    if (-not $muiPath -and $EnforceEnUsFallback) {
+        foreach ($dir in $dirs) {
+            $fallback = Join-Path (Join-Path $dir 'en-US') "$exeName.mui"
+            if (Test-Path -LiteralPath $fallback) { $muiPath = $fallback; $resolvedLang = 'en-US'; break }
+        }
+    }
+
+    if (-not $muiPath) {
+        throw "Could not locate notepad.exe.mui for $exePath. On some systems Notepad is a Store app without a classic MUI."
+    }
+
+    # Stage payload on host: System32\notepad.exe and System32\<lang>\notepad.exe.mui
+    $sys32Out = Join-Path $HostPayloadRoot "System32"
+    $langOut  = Join-Path $sys32Out $resolvedLang
+    New-Item -ItemType Directory -Path $langOut -Force | Out-Null
+    Copy-Item -LiteralPath $exePath -Destination (Join-Path $sys32Out $exeName) -Force
+    Copy-Item -LiteralPath $muiPath -Destination (Join-Path $langOut "$exeName.mui") -Force
+}
 
 function New-WSB {
     [CmdletBinding(SupportsShouldProcess = $true)]
@@ -88,7 +223,10 @@ function New-WSB {
         [String]$Command_to_Run,
         [Array]$AdditionalMappedFolders = @()
     )
-
+    
+    # Prepare Notepad payload
+    $np = Add-NotepadToSandbox -EnforceEnUsFallback
+    
     New-Item $Sandbox_File_Path -type file -Force | Out-Null
     Add-Content -LiteralPath $Sandbox_File_Path -Value "<Configuration>"
     Add-Content -LiteralPath $Sandbox_File_Path -Value "    <VGpu>$Sandbox_VGpu</VGpu>"
@@ -103,13 +241,11 @@ function New-WSB {
     }
 
     Add-Content $Sandbox_File_Path "    <MappedFolders>"
-    if ( ($Type -eq "Intunewin") -or ($Type -eq "ISO") -or ($Type -eq "7z")  -or ($Type -eq "PS1System") -or ($Type -eq "SDBApp") -or ($Type -eq "EXE") -or ($Type -eq "Folder_On") -or ($Type -eq "Folder_Inside") ) {
-        Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
-        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>C:\ProgramData\Run_in_Sandbox</HostFolder>"
-        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>C:\Run_in_Sandbox</SandboxFolder>"
-        Add-Content -LiteralPath $Sandbox_File_Path -Value "            <ReadOnly>$Sandbox_ReadOnlyAccess</ReadOnly>"
-        Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
-    }
+    Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
+    Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>C:\ProgramData\Run_in_Sandbox</HostFolder>"
+    Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>C:\Run_in_Sandbox</SandboxFolder>"
+    Add-Content -LiteralPath $Sandbox_File_Path -Value "            <ReadOnly>$Sandbox_ReadOnlyAccess</ReadOnly>"
+    Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
 
     if ($Type -eq "SDBApp") {
         $SDB_Full_Path = $ScriptPath
@@ -118,6 +254,7 @@ function New-WSB {
         $Apps_to_install_path = $Get_Apps_to_install.Applications.Application.Path | Select-Object -Unique
 
         ForEach ($App_Path in $Apps_to_install_path) {
+            Get-ChildItem -Path $App_Path -Recurse | Unblock-File
             Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
             Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>$App_Path</HostFolder>"
             Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>C:\SBDApp</SandboxFolder>"
@@ -125,6 +262,7 @@ function New-WSB {
             Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
         }
     } else {
+        Get-ChildItem -Path $DirectoryName -Recurse | Unblock-File
         Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>$DirectoryName</HostFolder>"
         if ($Type -eq "IntuneWin") { Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>C:\IntuneWin</SandboxFolder>" }
@@ -134,15 +272,15 @@ function New-WSB {
     
     # Add any additional mapped folders
     foreach ($MappedFolder in $AdditionalMappedFolders) {
+        Get-ChildItem -Path $($MappedFolder.HostFolder) -Recurse | Unblock-File
         Add-Content -LiteralPath $Sandbox_File_Path -Value "        <MappedFolder>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "            <HostFolder>$($MappedFolder.HostFolder)</HostFolder>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "            <SandboxFolder>$($MappedFolder.SandboxFolder)</SandboxFolder>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "            <ReadOnly>$($MappedFolder.ReadOnly)</ReadOnly>"
         Add-Content -LiteralPath $Sandbox_File_Path -Value "        </MappedFolder>"
     }
-    
     Add-Content -LiteralPath $Sandbox_File_Path -Value "    </MappedFolders>"
-
+    
     Add-Content -Path $Sandbox_File_Path  -Value "    <LogonCommand>"
     Add-Content -Path $Sandbox_File_Path  -Value "        <Command>$Command_to_Run</Command>"
     Add-Content -Path $Sandbox_File_Path  -Value "    </LogonCommand>"
@@ -184,10 +322,13 @@ switch ($Type) {
             Write-LogMessage -Message_Type "INFO" -Message "Using cached 7-Zip installer: $CachedInstaller"
         }
         
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command -AdditionalMappedFolders $AdditionalFolders
     }
     "CMD" {
         $Script:Startup_Command = $PSRun_Command + " " + "Start-Process $Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "EXE" {
@@ -225,20 +366,28 @@ switch ($Type) {
 
         $EXE_Installer = "$Sandbox_Root_Path\EXE_Install.ps1"
         $Script:Startup_Command = $PSRun_File + " " + "$EXE_Installer"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "Folder_On" {
-        New-WSB
+        $Startup_Command = Enable-StartupScripts
+        New-WSB -Command_to_Run $Startup_Command
     }
     "Folder_Inside" {
-        New-WSB
+        $Startup_Command = Enable-StartupScripts
+        New-WSB -Command_to_Run $Startup_Command
     }
     "HTML" {
         $Script:Startup_Command = $PSRun_Command + " " + "`"Invoke-Item -Path `'$Full_Startup_Path_Quoted`'`""
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "URL" {
         $Script:Startup_Command = $PSRun_Command + " " + "Start-Process $Sandbox_Root_Path"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "Intunewin" {
@@ -281,6 +430,8 @@ switch ($Type) {
 
         $Intunewin_Installer = "$Sandbox_Root_Path\IntuneWin_Install.ps1"
         $Script:Startup_Command = $PSRun_File + " " + "$Intunewin_Installer"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "ISO" {
@@ -317,6 +468,7 @@ switch ($Type) {
             Write-LogMessage -Message_Type "INFO" -Message "Using cached 7-Zip installer for ISO: $CachedInstaller"
         }
         
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command -AdditionalMappedFolders $AdditionalFolders
     }
     "MSI" {
@@ -351,28 +503,38 @@ switch ($Type) {
 
         $Form_MSI.ShowDialog() | Out-Null
 
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "MSIX" {
         $Script:Startup_Command = $PSRun_Command + " " + "Add-AppPackage -Path $Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "PDF" {
         $Full_Startup_Path_Quoted = $Full_Startup_Path_Quoted.Replace('"', '')
         $Script:Startup_Command = $PSRun_Command + " " + "`"Invoke-Item -Path `'$Full_Startup_Path_Quoted`'`""
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "PPKG" {
         $Script:Startup_Command = $PSRun_Command + " " + "Install-ProvisioningPackage $Full_Startup_Path_Quoted -forceinstall -quietinstall"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "PS1Basic" {
         $Script:Startup_Command = $PSRun_File + " " + "$Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "PS1System" {
         $Script:Startup_Command = "$Sandbox_Root_Path\PsExec.exe \\localhost -nobanner -accepteula -s Powershell -ExecutionPolicy Bypass -File $Full_Startup_Path_Quoted"
-        #$Script:Startup_Command = "$Sandbox_Root_Path\PsExec.exe -accepteula -i -d -s powershell -executionpolicy bypass -file $Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "PS1Params" {
@@ -406,20 +568,27 @@ switch ($Type) {
             })
 
         $Form_PS1.ShowDialog() | Out-Null
-
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "REG" {
         $Script:Startup_Command = "REG IMPORT $Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "SDBApp" {
         $AppBundle_Installer = "$Sandbox_Root_Path\AppBundle_Install.ps1"
         $Script:Startup_Command = $PSRun_File + " " + "$AppBundle_Installer"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "VBSBasic" {
         $Script:Startup_Command = "wscript.exe $Full_Startup_Path_Quoted"
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "VBSParams" {
@@ -454,10 +623,13 @@ switch ($Type) {
 
         $Form_VBS.ShowDialog() | Out-Null
 
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
     "ZIP" {
         $Script:Startup_Command = $PSRun_Command + " " + "`"Expand-Archive -LiteralPath '$Full_Startup_Path' -DestinationPath '$Sandbox_Desktop_Path\ZIP_extracted'`""
+        
+        $Startup_Command = Enable-StartupScripts -OriginalCommand $Startup_Command
         New-WSB -Command_to_Run $Startup_Command
     }
 }
@@ -473,4 +645,6 @@ if ($WSB_Cleanup -eq $True) {
     Remove-Item -LiteralPath $Intunewin_Content_File -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $EXE_Command_File -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath "$Run_in_Sandbox_Folder\App_Bundle.sdbapp" -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath "$Run_in_Sandbox_Folder\NotepadPayload" -Force -Recurse -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath "$Run_in_Sandbox_Folder\startup-scripts\OriginalCommand.txt" -Force -ErrorAction SilentlyContinue
 }

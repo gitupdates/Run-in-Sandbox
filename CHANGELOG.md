@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2025-10-06
+### Added
+- Added startup functionality, making it possible to run multiple startup Scripts in the Sandbox. Improves (and kinda Fixes) [#11]https://github.com/Joly0/Run-in-Sandbox/issues/11
+- Added some useful startup script (Notepad, Context Menu customization, fix for slow MSI installation); Thanks to ThioJoe https://github.com/ThioJoe/Windows-Sandbox-Tools
+- Added code to unblock files in the host folder that is mapped to the sandbox. Fixes [#10]https://github.com/Joly0/Run-in-Sandbox/issues/10
+### Fixed
+- Fixed running multiple Apps through SDBApp
+### Changed
+- Changed some startup behaviour and adjusted showing some cmd/powershell windows and hiding some
+
+
 ## 2025-08-20
 ### Security
 - **Enhanced 7-Zip Integration:** Removed bundled 7-Zip executables for improved security

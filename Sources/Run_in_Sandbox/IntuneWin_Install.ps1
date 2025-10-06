@@ -1,6 +1,7 @@
 param (
-	[String]$Intunewin_Content_File = "C:\Run_in_Sandbox\Intunewin_Folder.txt",
-	[String]$Intunewin_Command_File = "C:\Run_in_Sandbox\Intunewin_Install_Command.txt"
+    [String]$Intunewin_Content_File = "C:\Run_in_Sandbox\Intunewin_Folder.txt",
+    [String]$Intunewin_Command_File = "C:\Run_in_Sandbox\Intunewin_Install_Command.txt",
+    [switch]$OpenDebugConsole # optional: open a console after each install
 )
 if (-not (Test-Path $Intunewin_Content_File) ) {
 	EXIT
@@ -41,4 +42,7 @@ $ServiceUI = "$Sandbox_Folder\ServiceUI.exe"
 $PsExec = "$Sandbox_Folder\PsExec.exe"
 
 
-& $PsExec \\localhost -w "$Extract_Path" -nobanner -accepteula -s $ServiceUI -Process:explorer.exe C:\windows\SysWOW64\cmd.exe /k $Command
+& $PsExec \\localhost -w "$Extract_Path" -nobanner -accepteula -s $ServiceUI -Process:explorer.exe C:\Windows\SysWOW64\cmd.exe /c $Command
+if ($OpenDebugConsole) {
+    & $PsExec \\localhost -w "$Extract_Path" -nobanner -accepteula -s -d $ServiceUI -Process:explorer.exe C:\Windows\SysWOW64\cmd.exe /k "echo 'Debug console for $FileName ready.'"
+}
