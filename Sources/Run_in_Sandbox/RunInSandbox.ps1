@@ -137,13 +137,17 @@ foreach ($i in $items) {
     }
 }
 
+# Restart Explorer so changes take effect
+Write-Host "[Orchestrator] Restarting Explorer so changes take effect"
+Get-Process explorer | Stop-Process -Force
+
 # 2) Read and run the original command last
 $origFile = Join-Path $ScriptsPath "OriginalCommand.txt"
 if (Test-Path -LiteralPath $origFile) {
     $orig = Get-Content -LiteralPath $origFile -Raw
     Write-Host "[Orchestrator] Running original command..."
     # Run through cmd to support both cmd and PowerShell-style lines
-    Start-process -Filepath "C:\Windows\SysWOW64\cmd.exe" -ArgumentList "/c $orig" -WindowStyle Hidden
+    Start-process -Filepath "C:\Windows\SysWOW64\cmd.exe" -ArgumentList @('/c', '"' + $orig + '"') -WindowStyle Hidden
 } else {
     Write-Warning "[Orchestrator] OriginalCommand.txt not found; nothing to run."
 }

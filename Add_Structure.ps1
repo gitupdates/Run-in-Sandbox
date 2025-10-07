@@ -74,6 +74,7 @@ if ($Add_Folder -eq $True) {
 Write-Progress -Activity $Progress_Activity -PercentComplete 35
 
 if ($Add_HTML -eq $True) {
+    Add-RegItem -Sub_Reg_Path "SystemFileAssociations\.html" -Type "HTML" -Key_Label "Run this web link in Sandbox"
     Add-RegItem -Sub_Reg_Path "MSEdgeHTM" -Type "HTML" -Key_Label "Run this web link in Sandbox"
     Add-RegItem -Sub_Reg_Path "ChromeHTML" -Type "HTML" -Key_Label "Run this web link in Sandbox"
     Add-RegItem -Sub_Reg_Path "IE.AssocFile.HTM" -Type "HTML" -Key_Label "Run this web link in Sandbox"
